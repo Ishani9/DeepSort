@@ -3,9 +3,6 @@ import torch
 import torchvision.transforms as transforms
 import cv2
 
-from .sort.nn_matching import NearestNeighborDistanceMetric
-from .sort.preprocessing import non_max_suppression
-# from .sort.detection import Detection
 from .sort.tracker import Tracker
 from .deep.original_model import Net
 
@@ -13,6 +10,74 @@ from .deep.original_model import Net
 __all__ = ['DeepSort']
 
 transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+
+def non_max_suppression(boxes, max_bbox_overlap, scores=None):
+    if len(boxes) == 0:
+        return []
+
+    boxes = boxes.astype(np.float)
+    pick = []
+
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2] + boxes[:, 0]
+    y2 = boxes[:, 3] + boxes[:, 1]
+
+    area = (x2 - x1 + 1) * (y2 - y1 + 1)
+    if scores is not None:
+        idxs = np.argsort(scores)
+    else:
+        idxs = np.argsort(y2)
+
+    while len(idxs) > 0:
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+
+        xx1 = np.maximum(x1[i], x1[idxs[:last]])
+        yy1 = np.maximum(y1[i], y1[idxs[:last]])
+        xx2 = np.minimum(x2[i], x2[idxs[:last]])
+        yy2 = np.minimum(y2[i], y2[idxs[:last]])
+
+        w = np.maximum(0, xx2 - xx1 + 1)
+        h = np.maximum(0, yy2 - yy1 + 1)
+
+        overlap = (w * h) / area[idxs[:last]]
+
+        idxs = np.delete(
+            idxs, np.concatenate(
+                ([last], np.where(overlap > max_bbox_overlap)[0])))
+
+    return pick
+
+def _cosine_distance(a, b, data_is_normalized=False):
+    if not data_is_normalized:
+        a = np.asarray(a) / np.linalg.norm(a, axis=1, keepdims=True)
+        b = np.asarray(b) / np.linalg.norm(b, axis=1, keepdims=True)
+    return 1. - np.dot(a, b.T)
+
+def _nn_cosine_distance(x, y):
+    distances = _cosine_distance(x, y)
+    return distances.min(axis=0)
+
+class NearestNeighborDistanceMetric(object):
+    def __init__(self, matching_threshold, budget=None):
+        self.matching_threshold = matching_threshold
+        self.budget = budget
+        self.samples = {}
+
+    def partial_fit(self, features, targets, active_targets):
+        for feature, target in zip(features, targets):
+            self.samples.setdefault(target, []).append(feature)
+            if self.budget is not None:
+                self.samples[target] = self.samples[target][-self.budget:]
+        self.samples = {k: self.samples[k] for k in active_targets}
+
+    def distance(self, features, targets):
+        cost_matrix = np.zeros((len(targets), len(features)))
+        for i, target in enumerate(targets):
+            cost_matrix[i, :] = _nn_cosine_distance(self.samples[target], features)
+        return cost_matrix
 
 class Detection(object):
     def __init__(self, tlwh, confidence, feature):
@@ -51,7 +116,7 @@ class DeepSort(object):
 
         max_cosine_distance = max_dist
         nn_budget = 100
-        metric = NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
+        metric = NearestNeighborDistanceMetric(max_cosine_distance, nn_budget)
         self.tracker = Tracker(metric, max_iou_distance=max_iou_distance, max_age=max_age, n_init=n_init)
 
     def update(self, bbox_xywh, confidences, ori_img):
