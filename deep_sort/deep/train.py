@@ -51,8 +51,12 @@ def plot_graph(train_loss_curve, train_acc_curve, test_loss_curve, test_acc_curv
 
 
 def train_test_model():
-    trainloader = torch.utils.data.DataLoader(torchvision.datasets.ImageFolder(train_dir, transform=transform_train), batch_size=64,shuffle=True)
-    testloader = torch.utils.data.DataLoader(torchvision.datasets.ImageFolder(test_dir, transform=transform_test),batch_size=64,shuffle=True)
+    train_data = torchvision.datasets.ImageFolder(train_dir, transform=transform_train)
+    test_data = torchvision.datasets.ImageFolder(test_dir, transform=transform_test)
+
+    trainloader = torch.utils.data.DataLoader(train_data, batch_size=64,shuffle=True)
+    testloader = torch.utils.data.DataLoader(test_data,batch_size=64,shuffle=False)
+
     num_classes = max(len(trainloader.dataset.classes), len(testloader.dataset.classes))
     net = Net(num_classes=num_classes).to(device)
     
@@ -66,7 +70,7 @@ def train_test_model():
     test_acc_curve=[]
 
     for epoch in range(0, no_epochs):
-        if (epoch+1)%20==0:
+        if epoch== 20 or epoch == 30:
             for params in optimizer.param_groups:
                 params['lr'] = params['lr'] * 0.1
 
@@ -109,11 +113,11 @@ def train_test_model():
         test_loss_curve.append(test_loss/len(testloader))
         test_acc_curve.append(curr_acc)
         
-        print("Training:   Loss:", test_loss/len(testloader), "Accuracy: ",round(curr_acc,3),"%")
+        print("Test    :   Loss:", test_loss/len(testloader), "Accuracy: ",round(curr_acc,3),"%")
 
         if best_accuracy<curr_acc:
             best_accuracy = curr_acc
-            torch.save(net.state_dict(), './checkpoint/model_trial.pth')
+            torch.save(net.state_dict(), './checkpoint/model_orginal_lr2030.pth')
     
     print("Training Finished")
     print("Best Accuracy: ", round(best_accuracy,3),"%")
@@ -122,3 +126,4 @@ def train_test_model():
 if __name__ == '__main__':
     train_loss_curve, train_acc_curve, test_loss_curve, test_acc_curve = train_test_model()
     plot_graph(train_loss_curve, train_acc_curve, test_loss_curve, test_acc_curve)
+    

@@ -5,7 +5,7 @@ import cv2
 
 from .sort.nn_matching import NearestNeighborDistanceMetric
 from .sort.preprocessing import non_max_suppression
-from .sort.detection import Detection
+# from .sort.detection import Detection
 from .sort.tracker import Tracker
 from .deep.original_model import Net
 
@@ -13,6 +13,26 @@ from .deep.original_model import Net
 __all__ = ['DeepSort']
 
 transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+
+class Detection(object):
+    def __init__(self, tlwh, confidence, feature):
+        self.tlwh = np.asarray(tlwh, dtype=np.float)    
+        self.confidence = float(confidence)
+        self.feature = np.asarray(feature, dtype=np.float32)
+
+    def to_tlbr(self):
+        """ Convert to format xl, yl, xr, yr """
+        ret = self.tlwh.copy()
+        ret[2:] += ret[:2]
+        return ret
+
+    def to_xyah(self):
+        """ Convert to format `cx, cy, aspect ratio, height """
+        ret = self.tlwh.copy()
+        ret[:2] += ret[2:] / 2
+        ret[2] /= ret[3]
+        return ret
+
 
 def resize_im(im, size):
     return cv2.resize(im.astype(np.float32)/255., size)
@@ -32,60 +52,38 @@ class DeepSort(object):
         max_cosine_distance = max_dist
         nn_budget = 100
         metric = NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
-
-        # tracker maintain a list contains(self.tracks) for each Track object
         self.tracker = Tracker(metric, max_iou_distance=max_iou_distance, max_age=max_age, n_init=n_init)
 
     def update(self, bbox_xywh, confidences, ori_img):
-        # bbox_xywh (#obj,4), [xc,yc, w, h]     bounding box for each person
-        # conf (#obj,1)
-
         self.height, self.width = ori_img.shape[:2]
+        bbox = self._xywh_to_tlwh(bbox_xywh)
 
-        # get appearance feature with neural network (Deep) *********************************************************
+        # Get features from deep
         features = self._get_features(bbox_xywh, ori_img)
 
-        bbox_tlwh = self._xywh_to_tlwh(bbox_xywh)   # # [cx,cy,w,h] -> [x1,y1,w,h]   top left
+        detections = [Detection(bbox[i], conf, features[i]) for i,conf in enumerate(confidences) if conf>self.min_confidence]
 
-        #  generate detections class object for each person *********************************************************
-        # filter object with less confidence
-        # each Detection obj maintain the location(bbox_tlwh), confidence(conf), and appearance feature
-        detections = [Detection(bbox_tlwh[i], conf, features[i]) for i,conf in enumerate(confidences) if conf>self.min_confidence]
-
-        # run on non-maximum supression (useless) *******************************************************************
         boxes = np.array([d.tlwh for d in detections])
         scores = np.array([d.confidence for d in detections])
-        indices = non_max_suppression(boxes, self.nms_max_overlap, scores)  # Here, nms_max_overlap is 1
+        indices = non_max_suppression(boxes, self.nms_max_overlap, scores)  
         detections = [detections[i] for i in indices]
 
-        # update tracker ********************************************************************************************
-        self.tracker.predict()      # predict based on t-1 info
-        # for first frame, this function do nothing
 
-        # detections is the measurement results as time T
+        self.tracker.predict()      
         self.tracker.update(detections)
 
-        # output bbox identities ************************************************************************************
         outputs = []
         for track in self.tracker.tracks:
-
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
-
-            box = track.to_tlwh()       # (xc,yc,a,h) to (x1,y1,w,h)
+            box = track.to_tlwh()       
             x1,y1,x2,y2 = self._tlwh_to_xyxy(box)
             track_id = track.track_id
             outputs.append(np.array([x1,y1,x2,y2,track_id], dtype=np.int))
         if len(outputs) > 0:
-            outputs = np.stack(outputs,axis=0)  # (#obj, 5) (x1,y1,x2,y2,ID)
+            outputs = np.stack(outputs,axis=0)  
         return outputs
 
-
-    """
-    TODO:
-        Convert bbox from xc_yc_w_h to xtl_ytl_w_h
-    Thanks JieChen91@github.com for reporting this bug!
-    """
     @staticmethod
     def _xywh_to_tlwh(bbox_xywh):
         if isinstance(bbox_xywh, np.ndarray):
