@@ -108,7 +108,7 @@ def eval_network(model, allloader, jumps):
 
 jumps = 10
 model = NeuralFactory()
-model.eval().load_state_dict(torch.load('model_weights.pt', map_location='cpu'))
+model.eval().load_state_dict(torch.load('checkpoints/model_weights.pt', map_location='cpu'))
 model = model.to(device)
 
 gt, estimate = eval_network(model, allloader, jumps)

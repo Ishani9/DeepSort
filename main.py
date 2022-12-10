@@ -34,9 +34,10 @@ tfms = transforms.Compose([
 
 class VideoTracker(object):
     def __init__(self):
-        self.input_path = 'test.mp4'
+        self.input_path = 'Video_Files/test.mp4'
         deepsort_model_path = "deep_sort/deep/checkpoint/model_orginal_lr2030.pth"
         yolo_model_path = 'yolov5/weights/yolov5s.pt'
+        speed_model_path = 'speed_estimation/checkpoints/model_weights.pt'
         self.img_size = 640  
         self.video = cv2.VideoCapture()
 
@@ -52,7 +53,7 @@ class VideoTracker(object):
             self.detector.half()  # to FP16
 
         self.speed_model = NeuralFactory()
-        self.speed_model.eval().load_state_dict(torch.load('speed_estimation/model_weights.pt', map_location='cpu'))
+        self.speed_model.eval().load_state_dict(torch.load(speed_model_path, map_location='cpu'))
         self.speed_model = self.speed_model.to(self.device)
 
         self.names = self.detector.module.names if hasattr(self.detector, 'module') else self.detector.names
