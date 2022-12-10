@@ -2,8 +2,10 @@
 from yolov5.utils.general import non_max_suppression, scale_coords, xyxy2xywh
 from yolov5.utils.torch_utils import select_device, time_synchronized
 from yolov5.utils.datasets import letterbox
+import torchvision.transforms as transforms
 
 from deep_sort.deep_sort import DeepSort
+from speed_estimation.orignal_model import NeuralFactory
 
 import os
 import time
@@ -18,6 +20,17 @@ __all__ = ['DeepSort']
 url = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(os.path.join(url, 'yolov5')))
 cudnn.benchmark = True
+
+def optical_flow_calc(frame, old_frame):
+    flow=1
+    return flow
+
+tfms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Resize((240,320)),
+    transforms.Normalize((0.1,0.1,0.1),(0.5,0.5,0.5))
+])
+
 
 class VideoTracker(object):
     def __init__(self):
@@ -38,17 +51,20 @@ class VideoTracker(object):
         if self.half:
             self.detector.half()  # to FP16
 
+        self.speed_model = NeuralFactory()
+        self.speed_model.eval().load_state_dict(torch.load('speed_estimation/model_weights.pt', map_location='cpu'))
+        self.speed_model = self.speed_model.to(self.device)
+
         self.names = self.detector.module.names if hasattr(self.detector, 'module') else self.detector.names
 
         print('Device: ', self.device)
 
 
     def __enter__(self):
-        assert os.path.isfile(self.input_path), "Path error"
+        assert os.path.isfile(self.input_path)
         self.video.open(self.input_path)
         assert self.video.isOpened()
 
-        # ************************* create output *************************
         os.makedirs('output/', exist_ok=True)
         # path of saved video and results
         self.save_video_path = os.path.join('output/', "results.mp4")
@@ -69,9 +85,20 @@ class VideoTracker(object):
     def run(self):
         yolo_time, sort_time, ids_no = [], [], []
         frame_no = 0
+        # old_frame = None
 
+        opticalflows = []
         while self.video.grab():
-            _, frame = self.video.retrieve()
+            _, frame = self.video.retrieve()                
+
+            # if frame_no<4:
+            #     flow = optical_flow_calc(frame, old_frame)
+            #     opticalflows.append(flow)
+            # else:
+            #     flow = optical_flow_calc(frame, old_frame)
+            #     opticalflows.append(flow)
+            #     speed_est = speed_modeler(opticalflows[-1],opticalflows[-2], opticalflows[-3],opticalflows[-4],frame)
+            # old_frame = frame
             outputs, yt, st = self.image_track(frame)        
             yolo_time.append(yt)
             sort_time.append(st)
@@ -89,6 +116,15 @@ class VideoTracker(object):
 
             self.writer.write(frame)
             frame_no = frame_no + 1
+
+    def speed_modeler(self, flow1, flow2, flow3, flow4, frame):
+        flow_image_bgr = (flow1 + flow2 + flow3 + flow4)/4
+        frame = frame[:, :, ::-1].transpose(2, 0, 1) #BGR to RGB
+        combined = 0.1*frame + flow_image_bgr
+        input =  tfms(combined)
+        speed = self.speed_model(torch.unsqeeze(input,0).float())
+        return speed.item()
+
 
     def image_track(self, frame):
         img = letterbox(frame, new_shape=self.img_size)[0]
