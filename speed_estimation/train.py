@@ -11,9 +11,9 @@ from orignal_model import NeuralFactory
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
 
-PATH_LABEL = 'train.txt'
-PATH_IMAGES_FOLDER = 'Train/'
-PATH_IMAGES_FLOW_FOLDER = 'train_images_flow/'
+PATH_LABEL = 'Dataset/data.txt'
+PATH_IMAGES_FOLDER = 'Dataset/Data/'
+PATH_IMAGES_FLOW_FOLDER = 'Dataset/images_flow/'
 
 tfms = transforms.Compose([
     transforms.ToTensor(),

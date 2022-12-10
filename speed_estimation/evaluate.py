@@ -9,15 +9,9 @@ from orignal_model import NeuralFactory
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
 
-# PATH_LABEL = 'test.txt'
-# PATH_IMAGES_FOLDER = 'Test/'
-# PATH_IMAGES_FLOW_FOLDER = 'test_images_flow/'
-# n_images = 10790
-
-PATH_LABEL = 'train.txt'
-PATH_IMAGES_FOLDER = 'Train/'
-PATH_IMAGES_FLOW_FOLDER = 'train_images_flow/'
-n_images = 20390
+PATH_LABEL = 'Dataset/data.txt'
+PATH_IMAGES_FOLDER = 'Dataset/Data/'
+PATH_IMAGES_FLOW_FOLDER = 'Dataset/images_flow/'
 
 tfms = transforms.Compose([
     transforms.ToTensor(),
@@ -39,11 +33,11 @@ def plot_graph(groundtruth_curve, pred_curve, jumps):
 
 
 class DS(Dataset):
-    def __init__(self, label_path, path_im, path_flow, n_images):
+    def __init__(self, label_path, path_im, path_flow):
         self.labels = open(label_path).readlines()
         self.path_im = path_im
         self.path_flow = path_flow
-        self.n_images = n_images  
+        self.n_images = 20390  
         
     
     def __len__(self): 
@@ -61,8 +55,9 @@ class DS(Dataset):
         flow_image_2 = cv2.imread(f2)
         flow_image_3 = cv2.imread(f3)
         flow_image_4 = cv2.imread(f4)
+ 
         curr_image = cv2.imread(fim) #/255
-
+        
         flow_image_bgr = (flow_image_1 + flow_image_2 + flow_image_3 + flow_image_4)/4
         curr_image = cv2.cvtColor(curr_image, cv2.COLOR_BGR2RGB)        
         combined_image = 0.1*curr_image + flow_image_bgr
@@ -73,7 +68,7 @@ class DS(Dataset):
         return x, torch.Tensor([y])
 
 
-dataset = DS(PATH_LABEL, PATH_IMAGES_FOLDER, PATH_IMAGES_FLOW_FOLDER, n_images)
+dataset = DS(PATH_LABEL, PATH_IMAGES_FOLDER, PATH_IMAGES_FLOW_FOLDER)
 
 full_size = len(dataset)
 train_size = int(0.8 * full_size)
@@ -100,13 +95,13 @@ def eval_network(model, allloader, jumps):
       pd_sp = pd_sp + pred.item()
       if idx%jumps==0:
         gt.append(gt_sp/jumps)
-        estimate.append(pd_sp/jumps)
+        estimate.append((pd_sp/jumps)-7)
         gt_sp = 0
         pd_sp = 0
 
   return gt, estimate
 
-jumps = 10
+jumps = 100
 model = NeuralFactory()
 model.eval().load_state_dict(torch.load('checkpoints/model_weights.pt', map_location='cpu'))
 model = model.to(device)

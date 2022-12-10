@@ -22,8 +22,17 @@ sys.path.append(os.path.abspath(os.path.join(url, 'yolov5')))
 cudnn.benchmark = True
 
 def optical_flow_calc(frame, old_frame):
-    flow=1
-    return flow
+    prev_image_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
+    curr_image_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    flow = cv2.calcOpticalFlowFarneback(prev_image_gray, curr_image_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    hsv = np.zeros_like(old_frame)
+    mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+    hsv[...,0] = ang*180/np.pi/2
+    hsv[...,1] = 255
+    hsv[...,2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    flow_image_bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return flow_image_bgr
 
 tfms = transforms.Compose([
     transforms.ToTensor(),
@@ -40,6 +49,7 @@ class VideoTracker(object):
         speed_model_path = 'speed_estimation/checkpoints/model_weights.pt'
         self.img_size = 640  
         self.video = cv2.VideoCapture()
+        speed_truth_path = 'speed_estimation/Dataset/data.txt'
 
         self.device = select_device('')
         self.half = self.device.type != 'cpu'
@@ -55,7 +65,7 @@ class VideoTracker(object):
         self.speed_model = NeuralFactory()
         self.speed_model.eval().load_state_dict(torch.load(speed_model_path, map_location='cpu'))
         self.speed_model = self.speed_model.to(self.device)
-
+        self.speed_truth = open(speed_truth_path).readlines()
         self.names = self.detector.module.names if hasattr(self.detector, 'module') else self.detector.names
 
         print('Device: ', self.device)
@@ -86,24 +96,27 @@ class VideoTracker(object):
     def run(self):
         yolo_time, sort_time, ids_no = [], [], []
         frame_no = 0
-        # old_frame = None
+        old_frame = np.zeros((480, 640, 3))
 
         opticalflows = []
         while self.video.grab():
             _, frame = self.video.retrieve()                
-
-            # if frame_no<4:
-            #     flow = optical_flow_calc(frame, old_frame)
-            #     opticalflows.append(flow)
-            # else:
-            #     flow = optical_flow_calc(frame, old_frame)
-            #     opticalflows.append(flow)
-            #     speed_est = speed_modeler(opticalflows[-1],opticalflows[-2], opticalflows[-3],opticalflows[-4],frame)
-            # old_frame = frame
+            if frame_no<4:
+                flow = optical_flow_calc(frame.astype(np.uint8), old_frame.astype(np.uint8))
+                opticalflows.append(flow)
+                speed_est = 404.404
+            else:
+                flow = optical_flow_calc(frame.astype(np.uint8), old_frame.astype(np.uint8))
+                opticalflows.append(flow)
+                opticalflows = opticalflows[-4:]
+                speed_est = self.speed_modeler(opticalflows[-1],opticalflows[-2], opticalflows[-3],opticalflows[-4],frame)
+            
+            old_frame = frame
             outputs, yt, st = self.image_track(frame)        
             yolo_time.append(yt)
             sort_time.append(st)
-            print('Frame %d. Time: YOLO: %.3fs SORT:%.3fs' % (frame_no, yt, st), "Objects: ", len(outputs))
+            gtspeed =round(float(self.speed_truth[frame_no].split()[0]),3)
+            print('Frame %d. Time: YOLO: %.3fs SORT:%.3fs' % (frame_no, yt, st), "Objects: ", len(outputs), "Speed Est: ", round(speed_est,3), "GT: ",  gtspeed)
             ids_no.append(len(outputs))
             if len(outputs) > 0:
                 bbox_xyxy = outputs[:, :4]
@@ -114,16 +127,18 @@ class VideoTracker(object):
                     cv2.rectangle(frame,(x1, y1),(x2,y2),(255,0,0),3)
                     cv2.rectangle(frame,(x1, y1-15),(x1+25,y1), (255,0,0),-1)
                     cv2.putText(frame,str(id),(x1,y1), cv2.FONT_HERSHEY_PLAIN, 1, [255,255,255], 2)
+            
+            cv2.putText(frame, 'Speed Estimate: '+str(round(speed_est,3))+'m/s   Real Speed: '+str(gtspeed)+'m/s' , (20,40), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 2)
 
             self.writer.write(frame)
             frame_no = frame_no + 1
 
     def speed_modeler(self, flow1, flow2, flow3, flow4, frame):
         flow_image_bgr = (flow1 + flow2 + flow3 + flow4)/4
-        frame = frame[:, :, ::-1].transpose(2, 0, 1) #BGR to RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)   
         combined = 0.1*frame + flow_image_bgr
         input =  tfms(combined)
-        speed = self.speed_model(torch.unsqeeze(input,0).float())
+        speed = self.speed_model(torch.unsqueeze(input,0).to(self.device).float())
         return speed.item()
 
 
