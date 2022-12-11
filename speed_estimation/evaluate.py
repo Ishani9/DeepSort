@@ -95,7 +95,7 @@ def eval_network(model, allloader, jumps):
       pd_sp = pd_sp + pred.item()
       if idx%jumps==0:
         gt.append(gt_sp/jumps)
-        estimate.append((pd_sp/jumps)-7)
+        estimate.append((pd_sp/jumps))
         gt_sp = 0
         pd_sp = 0
 
