@@ -1,4 +1,7 @@
-# vim: expandtab:ts=4:sw=4
+'''
+Reference Code Used for SORT Algorithm
+https://github.com/HowieMa/DeepSORT_YOLOv5_Pytorch/tree/master/deep_sort/sort
+'''
 from __future__ import absolute_import
 from . import kalman_filter
 from . import linear_assignment
@@ -138,10 +141,8 @@ class Tracker:
             return cost_matrix
 
 
-        confirmed_tracks = [
-            i for i, t in enumerate(self.tracks) if t.is_confirmed()]   
-        unconfirmed_tracks = [
-            i for i, t in enumerate(self.tracks) if not t.is_confirmed()]   
+        confirmed_tracks = [i for i, t in enumerate(self.tracks) if t.is_confirmed()]   
+        unconfirmed_tracks = [i for i, t in enumerate(self.tracks) if not t.is_confirmed()]   
 
         matches_a, unmatched_tracks_a, unmatched_detections = linear_assignment.matching_cascade(
                 gated_metric, self.metric.matching_threshold, self.max_age,

@@ -4,7 +4,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torchvision
 from tqdm import tqdm
-from original_model import Net
+from deep_model import Net
 import numpy as np
 
 # device

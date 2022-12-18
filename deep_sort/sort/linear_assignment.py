@@ -1,3 +1,8 @@
+'''
+Reference Code Used for SORT Algorithm
+https://github.com/HowieMa/DeepSORT_YOLOv5_Pytorch/tree/master/deep_sort/sort
+'''
+
 from __future__ import absolute_import
 import numpy as np
 from scipy.optimize import linear_sum_assignment as linear_assignment

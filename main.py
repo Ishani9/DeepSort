@@ -44,13 +44,33 @@ tfms = transforms.Compose([
 
 def plot_graphs(prinddata):
     yolo_time, sort_time, ids_no, speede, speedg = prinddata
-    plt.plot(ids_no[4:], yolo_time[4:], 'o', label="YOLO Prediction Time")
-    plt.plot(ids_no[4:], sort_time[4:], 'o', label="DeepSort Prediction Time")
-    plt.title("Ground Truth vs Prediction")
-    plt.legend()
+    yolo_time = np.array(yolo_time)
+    sort_time = np.array(sort_time)
+
+    feat = np.unique(ids_no)[1:]
+    ytime_data = []
+    stime_data = []
+
+    for sp in feat:
+        idsall = np.where(ids_no == sp)[0]
+        
+        ytime_data.append(yolo_time[idsall.astype(int)])
+        stime_data.append(sort_time[idsall.astype(int)])
+
+    plt.boxplot(ytime_data)
+    plt.xticks(list(range(1,len(feat)+1)), feat)
+    plt.title("YOLO Time vs Objects in Frame")
     plt.ylabel("Time")
     plt.xlabel("Objects in Frame")
-    plt.savefig("output/Time_Analysis.jpg")
+    plt.savefig("output/YOLO_Time_Analysis.jpg")
+    plt.show()
+
+    plt.boxplot(stime_data)
+    plt.xticks(list(range(1,len(feat)+1)), feat)
+    plt.title("SORT Time vs Objects in Frame")
+    plt.ylabel("Time")
+    plt.xlabel("Objects in Frame")
+    plt.savefig("output/SORT_Time_Analysis.jpg")
     plt.show()
 
     plt.plot(range(4,len(speede)), speede[4:], label="Speed Estimate")
@@ -66,7 +86,7 @@ def plot_graphs(prinddata):
 
 class VideoTracker(object):
     def __init__(self):
-        self.input_path = 'Video_Files/train.mp4'
+        self.input_path = 'Video_Files/fullvid.mp4'
         deepsort_model_path = "deep_sort/deep/checkpoint/model_orginal_lr2030.pth"
         yolo_model_path = 'yolov5/weights/yolov5s.pt'
         speed_model_path = 'speed_estimation/checkpoints/model_weights.pt'
@@ -78,7 +98,7 @@ class VideoTracker(object):
         self.half = self.device.type != 'cpu'
         use_cuda = self.device.type != 'cpu' and torch.cuda.is_available()
 
-        self.deepsort = DeepSort(deepsort_model_path, max_dist=0.2, min_confidence=0.3, nms_max_overlap=0.5, max_iou_distance= 0.7, max_age= 70, n_init=3, nn_budget=100, use_cuda=use_cuda)
+        self.deepsort = DeepSort(deepsort_model_path, use_cuda=use_cuda)
 
         self.detector = torch.load(yolo_model_path, map_location=self.device)['model'].float()  
         self.detector.to(self.device).eval()

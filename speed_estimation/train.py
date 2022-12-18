@@ -3,13 +3,16 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torch.optim as optim
+import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import cv2
 from orignal_model import NeuralFactory
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+if torch.cuda.is_available():
+    cudnn.benchmark = True
 
 PATH_LABEL = 'Dataset/data.txt'
 PATH_IMAGES_FOLDER = 'Dataset/Data/'
@@ -74,9 +77,9 @@ full_size = len(dataset)
 train_size = int(0.8 * full_size)
 test_size = full_size - train_size
 
-# Change this if prediction is bad
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-# train_dataset, test_data
+train_dataset = torch.utils.data.Subset(dataset, list(range(0, train_size)))
+test_dataset = torch.utils.data.Subset(dataset, list(range(train_size, full_size)))
+
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=2,shuffle=True)
 testloader = torch.utils.data.DataLoader(test_dataset, batch_size=2,shuffle=False)
 
@@ -120,12 +123,12 @@ def train_network(model, optimizer, criterion, trainloader, testloader, epochs):
 
       validation_loss.append(val_loss_sum/len(testloader))
       print("Validation Loss: ", val_loss_sum/len(testloader))
-    torch.save(model.state_dict(), "model_weights.pt")
+    torch.save(model.state_dict(), "checkpoints/model_weights.pt")
   return train_loss, val_loss
 
 
 model = NeuralFactory().to(device)
-epochs = 30
+epochs = 12
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=10e-5, weight_decay=0.001)
 train_loss_values, test_loss_values = train_network(model, optimizer, criterion, trainloader, testloader, epochs)

@@ -1,3 +1,8 @@
+'''
+Reference Code Used for SORT Algorithm
+https://github.com/HowieMa/DeepSORT_YOLOv5_Pytorch/tree/master/deep_sort/sort
+'''
+
 import numpy as np
 import scipy.linalg
 
