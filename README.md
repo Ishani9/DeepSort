@@ -1,16 +1,24 @@
 # Advanced Driver Assistance using DeepSORT
 
-
-## To run our Project on custom video: 
-
-Change 'input_path' in the main.py file to the path of test video and run
-
+## To run DeepSort, run in command line:
 ```
 python main.py
 ```
 
-## Final Result:
-Video Link: https://youtu.be/d_tW3JKQxvk
+## Define custom video path: 
+On Line 65 in main.py change to the path of test video
+```
+self.input_path = 'Video_Files/fullvid.mp4'
+```
 
-https://user-images.githubusercontent.com/57087410/208315525-5484327a-87e4-42c0-9ac8-ba2a0d3bbdad.mp4
+## To Train Deep Descriptor Network: 
+- Download Market1501 Dataset
+- Run preprocess.py to convert it to Pytorch accessible format
+- Change Line 16 to the path of the dataset folder 
+```
+root = "./dataset/"
+```
+
+## Final Result:
+Video Link: https://youtu.be/qWqGCyW5Qfo
 
